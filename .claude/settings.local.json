@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(wsl -l -v)"
+    ]
+  }
+}

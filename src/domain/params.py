@@ -1,0 +1,49 @@
+"""Strategy parameters — the §5 starting defaults, all tunable via config.
+
+These are deliberately conservative. Nothing here is a promise; they gate when
+the system is *allowed* to act and default heavily toward NO TRADE.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+
+
+@dataclass(frozen=True)
+class StrategyParams:
+    # --- decision detection (what counts as one independent decision) ---
+    min_notional_usd: Decimal = Decimal(100)
+    min_fraction_of_typical: Decimal = Decimal("0.25")
+
+    # --- trader eligibility ---
+    min_resolved_markets: int = 30
+    history_days: int = 180
+
+    # --- polling / detection latency ---
+    poll_interval_sec: int = 90
+    reaction_latency_sec: int = 5
+    data_staleness_sec: int = 300  # older than this -> NO TRADE
+
+    # --- virtual portfolio sizing / risk ---
+    starting_balance_usd: Decimal = Decimal(1000)
+    bet_fraction: Decimal = Decimal("0.03")
+    max_position_fraction: Decimal = Decimal("0.05")
+    max_correlated_group_fraction: Decimal = Decimal("0.10")
+
+    # --- signal gate ---
+    consensus_threshold: float = 0.60
+    min_edge_after_costs: float = 0.02
+    min_signal_contributors: int = 2  # fewer -> NO TRADE
+    evidence_shrinkage_k: float = 20.0  # decisions needed to earn full evidence weight
+    freshness_tau_days: float = 30.0  # exponential staleness decay of a trader's view
+    min_mean_roi: float = 0.0  # fix (a): price-aware skill floor for the pool
+
+    # --- scoring ---
+    wilson_z: float = 1.96
+
+    # --- provenance ---
+    strategy_version: str = "v0.0"  # stamped on every audited paper trade
+
+
+DEFAULTS = StrategyParams()

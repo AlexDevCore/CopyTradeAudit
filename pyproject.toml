@@ -1,0 +1,24 @@
+[project]
+name = "copytrader"
+version = "0.0.0"
+description = "Paper-trading research tool for copying strong Polymarket traders"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.116.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.34.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

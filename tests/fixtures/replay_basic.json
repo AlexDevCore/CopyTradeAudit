@@ -1,0 +1,12 @@
+{
+  "trades": [
+    {"proxyWallet": "0xA", "conditionId": "m1", "outcome": "Yes", "side": "BUY", "price": 0.50, "size": 300, "timestamp": 1767225600},
+    {"proxyWallet": "0xA", "conditionId": "m1", "outcome": "Yes", "side": "BUY", "price": 0.52, "size": 200, "timestamp": 1767225660},
+    {"proxyWallet": "0xA", "conditionId": "m2", "outcome": "No", "side": "BUY", "price": 0.45, "size": 300, "timestamp": 1767229200},
+    {"proxyWallet": "0xA", "conditionId": "m3", "outcome": "Yes", "side": "BUY", "price": 0.60, "size": 300, "timestamp": 1767232800},
+    {"proxyWallet": "0xB", "conditionId": "m1", "outcome": "No", "side": "BUY", "price": 0.50, "size": 300, "timestamp": 1767225600},
+    {"proxyWallet": "0xB", "conditionId": "m2", "outcome": "Yes", "side": "BUY", "price": 0.55, "size": 300, "timestamp": 1767229200}
+  ],
+  "outcomes": {"m1": "YES", "m2": "NO", "m3": "NO"},
+  "categories": {"m1": "politics", "m2": "politics", "m3": "politics"}
+}
