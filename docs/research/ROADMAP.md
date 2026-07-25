@@ -69,7 +69,7 @@ The strategy's data is the **public, keyless Polymarket APIs → $0.00/day.**
 
 | Requirement | State |
 |---|---|
-| Positive untouched out-of-sample net result after costs | ❌ no real backtest yet |
+| Positive untouched out-of-sample net result after costs | ❌ **real pilot done (Sports 90d): strategy inert / no edge** — see `EXPERIMENTS_REAL.md` |
 | Result not driven by a few outliers (top-5 share checked) | ❌ n/a |
 | Enough independent **events** (not trades) | ❌ n/a |
 | Stable across ≥2 time windows | ❌ n/a |
@@ -91,8 +91,11 @@ The strategy's data is the **public, keyless Polymarket APIs → $0.00/day.**
 
 **PAPER-ONLY.**  Micro-live: **NO-GO.**
 
-The engineering is sound and now self-measuring, but there is **no real
-out-of-sample evidence of edge**, the consensus score is uncalibrated, copyability
+A first **real-data** pilot (Sports, 90d, `EXPERIMENTS_REAL.md`) now backs this:
+the leakage-safe strategy is **structurally inert** on real Sports data (no trader
+reaches the resolved-market floor; 95% of trades are sub-threshold dust), and
+forced variants show **no edge** on a negligible sample. The engineering is sound
+and self-measuring, but there is **still no real out-of-sample evidence of edge**, the consensus score is uncalibrated, copyability
 is undemonstrated, and independent research shows Polymarket skill rarely persists
 out-of-sample. Advance to **READY FOR EXTENDED PAPER TEST** only after path 2
 (real-data replay) + path 3 (calibration) are done and a real, event-clustered,
