@@ -149,13 +149,27 @@ def _to_action(value: Any) -> Action:
     raise ValueError(f"cannot map side to Action: {value!r}")
 
 
+def _epoch_to_dt(value: float) -> datetime:
+    """Convert a unix epoch to UTC, auto-detecting seconds vs milliseconds.
+
+    Polymarket mixes units: Data /trades uses seconds (10 digits) while CLOB
+    /book uses milliseconds (13 digits). A raw ms value fed to a seconds parser
+    lands in the year ~58000, so we normalise by magnitude. Anything >= 1e12 is
+    treated as milliseconds. (Validated against live payloads, 2026-07.)
+    """
+    v = float(value)
+    if v >= 1e12:  # milliseconds
+        v /= 1000.0
+    return datetime.fromtimestamp(v, tz=timezone.utc)
+
+
 def _to_dt(value: Any) -> datetime:
-    # Accept unix seconds (int/str) or ISO 8601.
+    # Accept unix seconds/millis (int/str) or ISO 8601.
     if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(int(value), tz=timezone.utc)
+        return _epoch_to_dt(value)
     text = str(value)
     if text.isdigit():
-        return datetime.fromtimestamp(int(text), tz=timezone.utc)
+        return _epoch_to_dt(int(text))
     return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
 

@@ -177,7 +177,17 @@ class PaperPortfolio:
         )
         self.free_balance -= fill.total_cost
         self.positions[market_id] = position
+        self._touch_equity()
         return position
+
+    def _touch_equity(self) -> None:
+        """Record equity (entry-priced) so drawdown updates on every state change.
+
+        Without external marks the drawdown metric would otherwise only move when
+        equity() is called explicitly; touching it here keeps it honest between
+        marks. Conservative: open positions are valued at entry (no paper gains).
+        """
+        self._record_equity(self.free_balance + self.open_value({}))
 
     def mark(self, market_id: str, price: Decimal) -> None:
         pos = self.positions.get(market_id)
@@ -210,6 +220,7 @@ class PaperPortfolio:
         )
         # hold_to_resolution_pnl stays None until the market resolves.
         self.closed.append(trade)
+        self._touch_equity()
         return trade
 
     def resolve_market(
@@ -248,6 +259,7 @@ class PaperPortfolio:
                 payoff = _payoff(trade.direction, outcome, trade.shares)
                 trade.outcome = outcome
                 trade.hold_to_resolution_pnl = payoff - trade.cost_basis
+        self._touch_equity()
         return settled
 
     def _to_closed(

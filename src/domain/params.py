@@ -37,7 +37,9 @@ class StrategyParams:
     min_signal_contributors: int = 2  # fewer -> NO TRADE
     evidence_shrinkage_k: float = 20.0  # decisions needed to earn full evidence weight
     freshness_tau_days: float = 30.0  # exponential staleness decay of a trader's view
-    min_mean_roi: float = 0.0  # fix (a): price-aware skill floor for the pool
+    min_mean_roi: float = (
+        0.02  # fix (a): price-aware skill floor (excludes favourite-buyers)
+    )
 
     # --- scoring ---
     wilson_z: float = 1.96

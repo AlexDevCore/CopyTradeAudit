@@ -1,0 +1,91 @@
+"""Metrics over TradeRecords, with event-clustered uncertainty.
+
+The headline number is mean net PnL per share with a bootstrap confidence
+interval that resamples EVENTS, not trades — because markets in one event are
+correlated and treating each trade as independent fabricates significance.
+"""
+
+from __future__ import annotations
+
+import random
+from collections import defaultdict
+from dataclasses import dataclass
+from decimal import Decimal
+
+from src.backtest.harness import TradeRecord
+
+_ZERO = Decimal(0)
+
+
+@dataclass(frozen=True)
+class Metrics:
+    n_trades: int
+    n_events: int
+    net_pnl: float
+    mean_pnl_per_share: float
+    win_rate: float
+    ci_low: float
+    ci_high: float
+    profit_factor: float
+    top5_share: float  # fraction of gross positive PnL from the 5 biggest wins
+
+    @property
+    def ci_excludes_zero(self) -> bool:
+        return self.ci_low > 0.0 or self.ci_high < 0.0
+
+
+def _event_means(records: list[TradeRecord]) -> dict[str, float]:
+    by_event: dict[str, list[float]] = defaultdict(list)
+    for r in records:
+        by_event[r.event_id].append(float(r.pnl_per_share))
+    return {ev: sum(v) / len(v) for ev, v in by_event.items()}
+
+
+def event_clustered_ci(
+    records: list[TradeRecord], *, iters: int = 2000, alpha: float = 0.05, seed: int = 0
+) -> tuple[float, float]:
+    """Percentile bootstrap CI for mean PnL/share, resampling events.
+
+    Each event contributes its own mean; we resample the set of events with
+    replacement. Fewer independent events -> a wider, honest interval.
+    """
+    means = list(_event_means(records).values())
+    if len(means) < 2:
+        return (float("-inf"), float("inf"))
+    rng = random.Random(seed)
+    n = len(means)
+    boots: list[float] = []
+    for _ in range(iters):
+        sample = [means[rng.randrange(n)] for _ in range(n)]
+        boots.append(sum(sample) / n)
+    boots.sort()
+    lo = boots[int((alpha / 2) * iters)]
+    hi = boots[int((1 - alpha / 2) * iters)]
+    return lo, hi
+
+
+def summarize(records: list[TradeRecord], *, seed: int = 0) -> Metrics:
+    if not records:
+        return Metrics(0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    pnls = [float(r.pnl_per_share) for r in records]
+    net = sum(pnls)
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
+    gross_win = sum(wins)
+    gross_loss = -sum(losses)
+    profit_factor = (gross_win / gross_loss) if gross_loss > 0 else float("inf")
+    top5 = sum(sorted(wins, reverse=True)[:5])
+    top5_share = (top5 / gross_win) if gross_win > 0 else 0.0
+    lo, hi = event_clustered_ci(records, seed=seed)
+    n_events = len({r.event_id for r in records})
+    return Metrics(
+        n_trades=len(records),
+        n_events=n_events,
+        net_pnl=net,
+        mean_pnl_per_share=net / len(records),
+        win_rate=len(wins) / len(records),
+        ci_low=lo,
+        ci_high=hi,
+        profit_factor=profit_factor,
+        top5_share=top5_share,
+    )
