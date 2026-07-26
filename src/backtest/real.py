@@ -103,7 +103,11 @@ def load(
     pct = DEFAULTS.market_size_percentile if percentile is None else percentile
     floors = market_size_floors(trades, pct)
     data = BacktestData(
-        trades=trades, markets=markets, price_fn=price_fn, market_floors=floors
+        trades=trades,
+        markets=markets,
+        price_fn=price_fn,
+        market_floors=floors,
+        price_paths=series,
     )
     return data, payload["meta"]
 

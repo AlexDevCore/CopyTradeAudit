@@ -50,6 +50,9 @@ class BacktestData:
     price_fn: PriceFn
     typical_notional: Decimal = Decimal(400)
     market_floors: dict[str, Decimal] | None = None  # per-market decision bar
+    # YES-price path per market: (sorted timestamps, yes prices). Needed to test
+    # exit rules — without a path you can only hold to resolution.
+    price_paths: dict[str, tuple[list[int], list[float]]] | None = None
 
     def floor_for(self, market_id: str) -> Decimal | None:
         return None if self.market_floors is None else self.market_floors.get(market_id)
