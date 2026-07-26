@@ -88,11 +88,73 @@ Ranking by **ROI** (the price-aware metric) instead of win rate produced fewer
 trades and no edge either — but it did not build the 98¢ portfolio, which is the
 behaviour we want to keep.
 
+---
+
+# Follow-up — ROI ranking + entry-price ceiling
+
+The salvage attempt: keep the consensus idea, but rank traders by **ROI** (price
+aware) instead of win rate, and **refuse entries above a price ceiling** where the
+payoff math is hopeless.
+
+## Result: refusing near-certainties leaves nothing to trade
+
+| variant (top20, hold, $25) | trades | events | median entry | P&L | ROI |
+|---|---|---|---|---|---|
+| rank=ROI, no cap | 10 | 2 | 0.980 | +$5.10 | +2.0% |
+| **rank=ROI, cap 0.90** | **0** | 0 | — | $0.00 | — |
+| rank=ROI, cap 0.80 | 0 | 0 | — | $0.00 | — |
+| rank=win rate, cap 0.90 | 4 | 2 | 0.856 | +$18.54 | +18.5% |
+| rank=win rate, cap 0.80 | 1 | 1 | 0.777 | +$7.17 | +28.7% |
+
+Widening the pool with the ceiling on turns the result **negative**:
+
+| top-N (ROI, cap 0.90) | trades | events | P&L | ROI |
+|---|---|---|---|---|
+| top30 | 1 | 1 | −$25.00 | −100% |
+| top50 | 3 | 2 | −$16.41 | −21.9% |
+| top100 | 5 | 3 | −$6.46 | −5.2% |
+
+## The decisive diagnostic: copying adds nothing over the price
+
+Widest possible copy net (top200, no cap) = 37 trades. Bucketed by entry price,
+next to what a **price-only** bet (no traders involved at all) earned in the same
+band:
+
+| entry band | copy: n | copy: mean PnL/share | price-only: n | price-only: mean PnL/share |
+|---|---|---|---|---|
+| 0.00–0.10 | 1 | −0.0240 | 40 | −0.0284 |
+| 0.50–0.80 | 1 | +0.2228 | 4 | +0.1232 |
+| 0.80–0.90 | 1 | +0.1887 | 3 | −0.1604 |
+| 0.90–0.95 | 3 | **+0.0900** | 4 | **+0.0925** |
+| **0.95–1.01** | **31** | **+0.0207** | **39** | **+0.0211** |
+
+In the only bands with meaningful counts, **copying and blind price-based buying
+are indistinguishable**: +0.0207 vs +0.0211 at 0.95+, +0.0900 vs +0.0925 at
+0.90–0.95. The tracked traders contribute **zero information** — 84% of copy
+trades land in the 0.95+ bucket and earn exactly what anyone buying that bucket
+earned.
+
+Also note: every 0.90+ favourite in this window won (39/39). In a normal window
+~1–2 should lose; a single upset flips the band negative. The apparent profit is
+the favourite premium collected during an upset-free 90 days, not an edge.
+
+## Final verdict on this family
+
+**REJECTED — and now explained.** The strategy's entire apparent profitability is
+the price band, not the traders:
+
+- Remove the near-certainty zone → **no trades at all** (ROI ranking) or a
+  negative result (wider pools).
+- Keep it → you are running a 96%-breakeven book where one upset erases 26 wins.
+- Either way the traders add nothing measurable over reading the price.
+
+This is the cleanest evidence so far that **late copying of public Polymarket
+signals carries no edge** in this dataset, and it matches the literature
+(well-calibrated prices; skill rarely persists out-of-sample).
+
 ## Reproduce
 
 ```bash
 uv run python -m src.backtest.real          # baseline tables
-python - <<'PY'                             # this experiment
-from src.backtest.variants import TopNConfig, run_top_winrate_majority
-PY
+# variants: src/backtest/variants.py -> TopNConfig(rank_by=…, max_entry_price=…)
 ```

@@ -36,6 +36,10 @@ class TopNConfig:
     min_sample: int = 5  # ignore 3/3=100% traders
     exit_when_they_exit: bool = True
     exit_fraction: float = 0.5  # majority of followers cutting -> we cut
+    # Hard entry-price ceiling. Above ~0.90 the payoff is so asymmetric that one
+    # loss erases dozens of wins (see EXPERIMENT_TOPN_WINRATE.md): a 0.98 entry
+    # needs a 98% hit rate just to break even. None disables the cap.
+    max_entry_price: Decimal | None = None
 
 
 def _rank_value(s: TraderSkill, how: str) -> float:
@@ -159,6 +163,11 @@ def run_top_winrate_majority(
         rec_hold = _record(data, market_id, meta, direction, detection_at, cfg)
         if rec_hold is None:
             continue
+        if (
+            top.max_entry_price is not None
+            and rec_hold.entry_price > top.max_entry_price
+        ):
+            continue  # refuse the near-certainty trap
         held.append(rec_hold)
 
         # Exit rule: leave when a majority of the followed traders cut.
