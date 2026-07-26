@@ -84,9 +84,56 @@ forced variants show no edge on a negligible sample. **Micro-live: NO-GO. Status
 PAPER-ONLY.** Next real step: repeat on Politics + a longer window, and calibrate
 `consensus_score`, before any status change.
 
+---
+
+# Round 2 — relative decision bar + smaller stake
+
+Three changes after round 1, run on the **same committed dataset log** (no new
+API calls):
+
+1. **Market-relative decision bar.** The absolute $100 floor was mis-calibrated:
+   it discarded 95% of sports flow instead of filtering its noise. Replaced by
+   the **p90 of each market's own trade-size distribution** (median floor here:
+   **$5.69**), with a $10 hard dust guard.
+2. **Smaller stake:** $5/trade instead of $30 (a $30 stake is also not fillable
+   in these books).
+3. **Dataset committed** as `data/real_sports_90d.json.gz` (484 KB) — replays
+   cost zero API calls; the collector now skips the network when the log exists.
+
+## Result (same walk-forward window, $1000 balance, $5/trade)
+
+| min_resolved | strategy | n | events | paper P&L | ROI | 95% CI/share | verdict |
+|---|---|---|---|---|---|---|---|
+| 30 | **copy_strategy** | 0 | 0 | $0.00 | — | — | inert |
+| 10 / 5 | **copy_strategy** | **10** | **2** | **+$1.02** | +2.0% | **[−inf, +inf]** | **no-edge** |
+| any | majority | 47 | 10 | −$16.79 | −7.1% | [−0.076, +0.059] | no-edge |
+| any | market_favorite | 49 | 10 | +$1.99 | +0.8% | [+0.016, +0.123] | "EDGE"* |
+| any | random | 49 | 10 | −$73.63 | −30.1% | [−0.053, +0.085] | no-edge |
+
+**The relative bar did wake the strategy up** — from 0 trades to 10 — but only
+across **2 independent events**, which is not evidence of anything.
+
+### A false-significance bug this run exposed (fixed)
+
+At 2 events the bootstrap produced a **zero-width interval** `[+0.020, +0.020]`
+and flagged **"EDGE"** — 100% win rate, apparently overwhelming significance,
+from two correlated games. That is exactly the trap this harness exists to
+prevent. Fixed: `MIN_EVENTS_FOR_CI = 8` — below that we return an infinite
+interval and report `no-edge` rather than inventing confidence
+(`test_ci_refuses_to_report_on_too_few_events`).
+
+### Reading it honestly
+
+- Copy strategy: **+$1.02 on 2 events** = noise, not edge. It still does not
+  clear the `market_favorite` bar in any meaningful sense.
+- `market_favorite` keeps its 96% win rate and **+0.8% ROI** — the favourite-buying
+  trap in one line: near-perfect accuracy, almost no money.
+- Nothing changed the verdict; the strategy is now *measurable* rather than inert,
+  which is progress in instrumentation, not in profitability.
+
 ## Reproduce
 
 ```bash
-uv run python -m src.backtest.collect   # ~few min, writes data/real_sports_90d.json
-uv run python -m src.backtest.real      # the tables above (deterministic from cache)
+uv run python -m src.backtest.collect   # no-op if the committed log exists
+uv run python -m src.backtest.real      # tables above, deterministic from the log
 ```

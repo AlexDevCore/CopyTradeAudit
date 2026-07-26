@@ -41,16 +41,26 @@ def _event_means(records: list[TradeRecord]) -> dict[str, float]:
     return {ev: sum(v) / len(v) for ev, v in by_event.items()}
 
 
+MIN_EVENTS_FOR_CI = 8
+"""Below this many independent events we refuse to publish an interval.
+
+A bootstrap over 2-3 events is degenerate: it can return a zero-width interval
+(e.g. [+0.020,+0.020]) that looks like overwhelming significance when it is
+actually no evidence at all. Refusing is the honest answer.
+"""
+
+
 def event_clustered_ci(
     records: list[TradeRecord], *, iters: int = 2000, alpha: float = 0.05, seed: int = 0
 ) -> tuple[float, float]:
     """Percentile bootstrap CI for mean PnL/share, resampling events.
 
     Each event contributes its own mean; we resample the set of events with
-    replacement. Fewer independent events -> a wider, honest interval.
+    replacement. Fewer independent events -> a wider, honest interval, and below
+    ``MIN_EVENTS_FOR_CI`` we return an infinite interval rather than a fake one.
     """
     means = list(_event_means(records).values())
-    if len(means) < 2:
+    if len(means) < MIN_EVENTS_FOR_CI:
         return (float("-inf"), float("inf"))
     rng = random.Random(seed)
     n = len(means)

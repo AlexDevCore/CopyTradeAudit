@@ -13,8 +13,14 @@ from decimal import Decimal
 @dataclass(frozen=True)
 class StrategyParams:
     # --- decision detection (what counts as one independent decision) ---
-    min_notional_usd: Decimal = Decimal(100)
+    # Hard dust guard only. The real bar is market-relative (percentile below):
+    # a flat $100 floor discards whole categories rather than filtering their
+    # noise — 95% of real sports trades are smaller than $100.
+    min_notional_usd: Decimal = Decimal(10)
     min_fraction_of_typical: Decimal = Decimal("0.25")
+    # A position counts as a decision when it is in the top (1-p) of that
+    # market's own trade-size distribution. 0.90 = "among the biggest 10% here".
+    market_size_percentile: float = 0.90
 
     # --- trader eligibility ---
     min_resolved_markets: int = 30

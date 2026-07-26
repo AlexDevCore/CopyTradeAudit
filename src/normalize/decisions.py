@@ -51,12 +51,20 @@ def build_decisions(
     *,
     typical_notional_usd: Decimal,
     params: StrategyParams,
+    market_floor_usd: Decimal | None = None,
 ) -> list[Decision]:
     """Reconstruct independent decisions for a single (wallet, market).
 
     ``typical_notional_usd`` is the trader's typical position notional, used for
-    the fraction-of-typical threshold. All trades must be for the same wallet
-    and market; they are sorted by timestamp here.
+    the fraction-of-typical threshold.
+
+    ``market_floor_usd`` makes the "is this a real decision?" bar **relative to
+    the market it happens in** — e.g. the 90th percentile of that market's own
+    trade notionals. A flat absolute floor is mis-calibrated across categories:
+    in sports ~95% of trades are under $100, so an absolute $100 bar discards the
+    entire market rather than its noise. When supplied, it replaces the
+    fraction-of-typical rule; ``params.min_notional_usd`` still applies as a hard
+    dust guard. All trades must be for the same wallet and market.
     """
     ordered = sorted(trades, key=lambda t: t.timestamp)
     decisions: list[Decision] = []
@@ -70,8 +78,11 @@ def build_decisions(
             return
         avg = active.add_cost / active.add_shares
         notional = abs(net) * avg
-        fraction_floor = params.min_fraction_of_typical * typical_notional_usd
-        if notional >= params.min_notional_usd and notional >= fraction_floor:
+        if market_floor_usd is not None:
+            relative_floor = market_floor_usd
+        else:
+            relative_floor = params.min_fraction_of_typical * typical_notional_usd
+        if notional >= params.min_notional_usd and notional >= relative_floor:
             active.decision = Decision(
                 wallet=active.wallet,
                 market_id=active.market_id,

@@ -12,6 +12,7 @@ a documented limitation (no depth, no partial-fill modelling).
 
 from __future__ import annotations
 
+import gzip
 import json
 import time
 from datetime import datetime, timezone
@@ -180,9 +181,19 @@ def collect(
     days: int = 90,
     max_markets: int = 120,
     min_volume: float = 5000.0,
-    out_path: str = "data/real_sports_90d.json",
+    out_path: str = "data/real_sports_90d.json.gz",
+    refresh: bool = False,
+    category: str = "sports",
 ) -> str:
-    tag = _tag_id("sports")
+    """Collect and cache a dataset log. Skips the network if the log exists.
+
+    The compressed log is committed to the repo, so replays of past events cost
+    no API calls and no waiting.
+    """
+    if Path(out_path).exists() and not refresh:
+        print(f"cache exists -> {out_path} (use refresh=True to re-fetch)")
+        return out_path
+    tag = _tag_id(category)
     markets = _collect_markets(
         tag, days=days, max_markets=max_markets, min_volume=min_volume
     )
@@ -197,7 +208,7 @@ def collect(
         "meta": {
             "collected_at": datetime.now(tz=timezone.utc).isoformat(),
             "days": days,
-            "category": "sports",
+            "category": category,
             "n_markets": len(markets),
             "n_trades": total_trades,
             "source": "public read-only Gamma+Data API",
@@ -207,13 +218,19 @@ def collect(
     }
     path = Path(out_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload), encoding="utf-8")
+    if path.suffix == ".gz":
+        with gzip.open(path, "wt", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+    else:
+        path.write_text(json.dumps(payload), encoding="utf-8")
     return out_path
 
 
 if __name__ == "__main__":
+    from src.backtest.real import read_cache
+
     p = collect()
-    data = json.loads(Path(p).read_text(encoding="utf-8"))
+    data = read_cache(p)
     meta = data["meta"]
     wallets = {t["wallet"] for m in data["markets"] for t in m["trades"]}
     print(f"cache -> {p}")

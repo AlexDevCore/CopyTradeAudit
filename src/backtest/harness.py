@@ -49,6 +49,29 @@ class BacktestData:
     markets: dict[str, MarketMeta]
     price_fn: PriceFn
     typical_notional: Decimal = Decimal(400)
+    market_floors: dict[str, Decimal] | None = None  # per-market decision bar
+
+    def floor_for(self, market_id: str) -> Decimal | None:
+        return None if self.market_floors is None else self.market_floors.get(market_id)
+
+
+def market_size_floors(
+    trades: Iterable[TraderTrade], percentile: float
+) -> dict[str, Decimal]:
+    """Per-market decision bar = that percentile of the market's trade notionals.
+
+    Makes "is this a meaningful bet?" relative to the venue it happens in: $50 in
+    a market whose median trade is $6 is a strong signal, the same $50 in a whale
+    market is noise.
+    """
+    by_market: dict[str, list[Decimal]] = defaultdict(list)
+    for t in trades:
+        by_market[t.market_id].append(abs(t.yes_delta) * t.yes_price)
+    floors: dict[str, Decimal] = {}
+    for market_id, sizes in by_market.items():
+        sizes.sort()
+        floors[market_id] = sizes[min(len(sizes) - 1, int(percentile * len(sizes)))]
+    return floors
 
 
 @dataclass(frozen=True)
@@ -91,7 +114,10 @@ def as_of_skills(
             continue
         usable = [t for t in trades if t.timestamp <= meta.resolved_at]
         decs = build_decisions(
-            usable, typical_notional_usd=data.typical_notional, params=params
+            usable,
+            typical_notional_usd=data.typical_notional,
+            params=params,
+            market_floor_usd=data.floor_for(market_id),
         )
         dec_by_wc[(wallet, meta.category)].extend(decs)
         outcomes[market_id] = meta.resolved_outcome

@@ -10,6 +10,7 @@ Usage: python -m src.backtest.real
 from __future__ import annotations
 
 import bisect
+import gzip
 import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -19,22 +20,36 @@ from src.backtest.harness import (
     BacktestData,
     MarketMeta,
     RunConfig,
+    market_size_floors,
     run_benchmark,
     run_copy_strategy,
 )
 from src.backtest.metrics import Metrics, summarize
 from src.domain.models import Action, Side, TraderTrade
-from src.domain.params import StrategyParams
+from src.domain.params import DEFAULTS, StrategyParams
 
-CACHE = "data/real_sports_90d.json"
+CACHE = "data/real_sports_90d.json.gz"
 
 
 def _yes_price(outcome: str, price: float) -> float:
     return price if str(outcome).lower().startswith("y") else (1.0 - price)
 
 
-def load(path: str = CACHE) -> tuple[BacktestData, dict]:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+def read_cache(path: str = CACHE) -> dict:
+    """Read the committed dataset log (.gz or plain .json)."""
+    p = Path(path)
+    if not p.exists() and p.suffix == ".gz":
+        p = p.with_suffix("")  # fall back to uncompressed
+    if p.suffix == ".gz":
+        with gzip.open(p, "rt", encoding="utf-8") as fh:
+            return json.load(fh)
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def load(
+    path: str = CACHE, *, percentile: float | None = None
+) -> tuple[BacktestData, dict]:
+    payload = read_cache(path)
     markets: dict[str, MarketMeta] = {}
     trades: list[TraderTrade] = []
     series: dict[str, tuple[list[int], list[float]]] = {}
@@ -85,9 +100,12 @@ def load(path: str = CACHE) -> tuple[BacktestData, dict]:
         buy = min(0.98, max(0.02, buy + slippage))
         return Decimal(str(round(buy, 4)))
 
-    return BacktestData(trades=trades, markets=markets, price_fn=price_fn), payload[
-        "meta"
-    ]
+    pct = DEFAULTS.market_size_percentile if percentile is None else percentile
+    floors = market_size_floors(trades, pct)
+    data = BacktestData(
+        trades=trades, markets=markets, price_fn=price_fn, market_floors=floors
+    )
+    return data, payload["meta"]
 
 
 def _split_time(data: BacktestData) -> tuple[datetime, datetime]:
@@ -97,8 +115,26 @@ def _split_time(data: BacktestData) -> tuple[datetime, datetime]:
     return mid, end
 
 
-def run(path: str = CACHE) -> dict:
-    data, meta = load(path)
+def paper_pnl(records, *, balance: Decimal, stake: Decimal) -> tuple[Decimal, Decimal]:
+    """Dollar paper P&L for a fixed stake per trade -> (pnl, total staked)."""
+    total = Decimal(0)
+    staked = Decimal(0)
+    for r in records:
+        shares = stake / r.entry_price
+        total += shares * r.pnl_per_share
+        staked += stake
+    return total, staked
+
+
+def run(
+    path: str = CACHE,
+    *,
+    stake: Decimal = Decimal(5),
+    balance: Decimal = Decimal(1000),
+    min_resolved_options: tuple[int, ...] = (30, 10, 5),
+    percentile: float | None = None,
+) -> dict:
+    data, meta = load(path, percentile=percentile)
     wallets = {t.wallet for t in data.trades}
     start, end = _split_time(data)
 
@@ -112,30 +148,40 @@ def run(path: str = CACHE) -> dict:
             params=StrategyParams(min_resolved_markets=min_resolved),
         )
 
-    results: dict[str, dict[str, Metrics]] = {}
-    for mr in (30, 10, 5):
+    results: dict[str, dict[str, tuple[Metrics, Decimal, Decimal]]] = {}
+    for mr in min_resolved_options:
         c = cfg(mr)
-        row: dict[str, Metrics] = {
-            "copy_strategy": summarize(run_copy_strategy(data, c))
-        }
+        row: dict[str, tuple[Metrics, Decimal, Decimal]] = {}
+        recs = run_copy_strategy(data, c)
+        row["copy_strategy"] = (
+            summarize(recs),
+            *paper_pnl(recs, balance=balance, stake=stake),
+        )
         for kind in ("majority", "market_favorite", "random"):
-            row[kind] = summarize(run_benchmark(data, c, kind))
+            b = run_benchmark(data, c, kind)
+            row[kind] = (summarize(b), *paper_pnl(b, balance=balance, stake=stake))
         results[f"min_resolved={mr}"] = row
 
+    floors = sorted(data.market_floors.values()) if data.market_floors else []
     return {
         "meta": meta,
         "n_wallets": len(wallets),
         "split": (start, end),
         "results": results,
+        "stake": stake,
+        "balance": balance,
+        "median_market_floor": floors[len(floors) // 2] if floors else None,
     }
 
 
-def _fmt(m: Metrics) -> str:
+def _fmt(m: Metrics, pnl: Decimal, staked: Decimal, balance: Decimal) -> str:
     verdict = "EDGE" if m.ci_excludes_zero and m.mean_pnl_per_share > 0 else "no-edge"
+    roi = (pnl / staked * 100) if staked else Decimal(0)
     return (
-        f"n={m.n_trades:4d} ev={m.n_events:3d} mean={m.mean_pnl_per_share:+.4f} "
-        f"CI[{m.ci_low:+.4f},{m.ci_high:+.4f}] {verdict:7s} wr={m.win_rate:.2f} "
-        f"pf={m.profit_factor:.2f} top5={m.top5_share:.2f}"
+        f"n={m.n_trades:4d} ev={m.n_events:3d} PnL=${float(pnl):+8.2f} "
+        f"ROI={float(roi):+6.1f}% end=${float(balance + pnl):8.2f} "
+        f"CI/sh[{m.ci_low:+.3f},{m.ci_high:+.3f}] {verdict:7s} wr={m.win_rate:.2f} "
+        f"top5={m.top5_share:.2f}"
     )
 
 
@@ -147,14 +193,20 @@ def main() -> None:
         f"wallets={r['n_wallets']} collected={meta['collected_at']}"
     )
     print(f"price proxy: {meta['price_proxy']}")
-    s, e = r["split"]
     print(
-        f"walk-forward test window: {s.date()} .. {e.date()} (pool uses only earlier-resolved markets)\n"
+        f"decision bar: market-relative p{DEFAULTS.market_size_percentile:.0%} "
+        f"(median floor ${float(r['median_market_floor'] or 0):.2f}), "
+        f"dust guard ${float(DEFAULTS.min_notional_usd):.0f}"
+    )
+    s, e = r["split"]
+    print(f"stake ${float(r['stake']):.2f}/trade on ${float(r['balance']):.0f} balance")
+    print(
+        f"walk-forward: {s.date()} .. {e.date()} (pool uses only earlier-resolved markets)\n"
     )
     for setting, row in r["results"].items():
         print(f"=== {setting} ===")
-        for name, m in row.items():
-            print(f"  {name:16s} {_fmt(m)}")
+        for name, (m, pnl, staked) in row.items():
+            print(f"  {name:16s} {_fmt(m, pnl, staked, r['balance'])}")
 
 
 if __name__ == "__main__":

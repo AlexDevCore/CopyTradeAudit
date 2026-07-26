@@ -21,5 +21,7 @@ graphify-out/
 .DS_Store
 .vscode/
 
-# real collected data (public, cached)
-data/
+# Collected public data. The compressed dataset logs ARE committed so past
+# events can be replayed without re-hitting the API; raw uncompressed dumps are not.
+data/*.json
+!data/*.json.gz

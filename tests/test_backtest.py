@@ -9,11 +9,14 @@ from src.backtest.harness import (
     MarketMeta,
     TradeRecord,
     as_of_skills,
+    market_size_floors,
     select_pool,
 )
 from src.backtest.metrics import summarize
 from src.backtest.synthetic import DT0
 from src.domain.models import Action, Side, TraderTrade
+from src.domain.params import StrategyParams
+from src.normalize.decisions import build_decisions
 from src.scoring.skill import TraderSkill
 
 
@@ -70,6 +73,69 @@ def test_select_pool_excludes_favourite_buyer():
     pool = select_pool(skills)  # default min_resolved=30, min_mean_roi=0.02
     assert ("val", "c") in pool
     assert ("fav", "c") not in pool  # high win rate, negative edge -> excluded
+
+
+def test_market_relative_floor_scales_to_the_market():
+    # A market of micro-bets: the p90 bar must land near the top of ITS own
+    # distribution, not at some absolute dollar figure.
+    trades = []
+    for i in range(10):
+        trades.append(
+            TraderTrade.from_token_trade(
+                wallet=f"w{i}",
+                market_id="cheap",
+                side=Side.YES,
+                action=Action.BUY,
+                shares=Decimal(str((i + 1) * 10)),  # $5 .. $50 notional @0.5
+                price=Decimal("0.50"),
+                timestamp=DT0,
+            )
+        )
+    floors = market_size_floors(trades, 0.90)
+    assert Decimal(40) <= floors["cheap"] <= Decimal(50)
+
+
+def test_relative_floor_admits_a_big_bet_in_a_micro_market():
+    # $30 bet in a market whose trades are ~$5 IS a decision under the relative
+    # rule, even though the old absolute $100 floor would have discarded it.
+    micro = [
+        TraderTrade.from_token_trade(
+            wallet="noise",
+            market_id="m",
+            side=Side.YES,
+            action=Action.BUY,
+            shares=Decimal(10),
+            price=Decimal("0.50"),  # $5
+            timestamp=DT0 + timedelta(minutes=i),
+        )
+        for i in range(20)
+    ]
+    big = TraderTrade.from_token_trade(
+        wallet="whale",
+        market_id="m",
+        side=Side.YES,
+        action=Action.BUY,
+        shares=Decimal(60),
+        price=Decimal("0.50"),  # $30
+        timestamp=DT0 + timedelta(minutes=30),
+    )
+    floors = market_size_floors(micro + [big], 0.90)
+    decs = build_decisions(
+        [big],
+        typical_notional_usd=Decimal(400),
+        params=StrategyParams(),
+        market_floor_usd=floors["m"],
+    )
+    assert len(decs) == 1  # would have been 0 under the old absolute $100 bar
+
+
+def test_ci_refuses_to_report_on_too_few_events():
+    # Two events with identical PnL used to yield a zero-width "significant"
+    # interval. That is fake significance; we must refuse instead.
+    recs = [_rec("e1", 0.02), _rec("e2", 0.02)]
+    m = summarize(recs)
+    assert m.ci_low == float("-inf") and m.ci_high == float("inf")
+    assert not m.ci_excludes_zero
 
 
 def _rec(event_id, pnl):
