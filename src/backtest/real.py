@@ -189,12 +189,15 @@ def _fmt(m: Metrics, pnl: Decimal, staked: Decimal, balance: Decimal) -> str:
     )
 
 
-def main() -> None:
-    r = run()
+def main(path: str | None = None) -> None:
+    import sys
+
+    r = run(path or (sys.argv[1] if len(sys.argv) > 1 else CACHE))
     meta = r["meta"]
     print(
-        f"REAL sports cache: markets={meta['n_markets']} trades={meta['n_trades']} "
-        f"wallets={r['n_wallets']} collected={meta['collected_at']}"
+        f"REAL {meta.get('category', '?')} cache: markets={meta['n_markets']} "
+        f"trades={meta['n_trades']} wallets={r['n_wallets']} "
+        f"collected={meta['collected_at']}"
     )
     print(f"price proxy: {meta['price_proxy']}")
     print(

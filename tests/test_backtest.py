@@ -194,3 +194,48 @@ def test_efficient_market_high_winrate_zero_edge():
     copy = res["copy_strategy"]
     assert copy.win_rate > 0.6
     assert abs(copy.mean_pnl_per_share) < 0.05
+
+
+def test_tail_blind_guard_refuses_edge_on_lossless_favourite_book():
+    # 12 near-certainty trades, every one a winner: the bootstrap sees no losses
+    # and would otherwise report a tight, confident, wrong "EDGE".
+    recs = [
+        TradeRecord(
+            market_id=f"m{i}",
+            event_id=f"e{i}",
+            category="c",
+            direction=Side.YES,
+            entry_price=Decimal("0.98"),
+            outcome=Side.YES,
+            fee=Decimal(0),
+            pnl_per_share=Decimal("0.02"),
+            detection_at=DT0,
+        )
+        for i in range(12)
+    ]
+    m = summarize(recs)
+    assert m.win_rate == 1.0
+    assert m.ci_low > 0  # the raw interval really is tight and positive
+    assert m.tail_blind  # ...but the sample cannot see the -0.98 tail
+    assert not m.ci_excludes_zero  # so we refuse to certify an edge
+
+
+def test_tail_blind_does_not_fire_on_mid_odds_book():
+    # Same perfect record at mid odds is not tail-blind: losses there are ordinary.
+    recs = [
+        TradeRecord(
+            market_id=f"m{i}",
+            event_id=f"e{i}",
+            category="c",
+            direction=Side.YES,
+            entry_price=Decimal("0.55"),
+            outcome=Side.YES,
+            fee=Decimal(0),
+            pnl_per_share=Decimal("0.45"),
+            detection_at=DT0,
+        )
+        for i in range(12)
+    ]
+    m = summarize(recs)
+    assert not m.tail_blind
+    assert m.ci_excludes_zero

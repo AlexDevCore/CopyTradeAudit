@@ -28,9 +28,28 @@ class Metrics:
     ci_high: float
     profit_factor: float
     top5_share: float  # fraction of gross positive PnL from the 5 biggest wins
+    mean_entry_price: float = 0.0
+
+    @property
+    def no_observed_losses(self) -> bool:
+        return self.n_trades > 0 and self.win_rate >= 1.0
+
+    @property
+    def tail_blind(self) -> bool:
+        """True when the bootstrap physically cannot see the downside.
+
+        An empirical bootstrap resamples only outcomes that occurred. If a
+        near-certainty book won every single trade, the sample contains no loss,
+        so the interval is tight and positive while the real distribution still
+        carries a rare −(entry) per share. Treating that as significance is how
+        a 98¢ book looks like a sure thing right up until it isn't.
+        """
+        return self.no_observed_losses and self.mean_entry_price >= 0.90
 
     @property
     def ci_excludes_zero(self) -> bool:
+        if self.tail_blind:
+            return False  # refuse to certify an edge the sample cannot test
         return self.ci_low > 0.0 or self.ci_high < 0.0
 
 
@@ -98,4 +117,5 @@ def summarize(records: list[TradeRecord], *, seed: int = 0) -> Metrics:
         ci_high=hi,
         profit_factor=profit_factor,
         top5_share=top5_share,
+        mean_entry_price=sum(float(r.entry_price) for r in records) / len(records),
     )
