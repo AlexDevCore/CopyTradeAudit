@@ -1,95 +1,96 @@
-# CopyTradeAudit — Design (v0.0)
+# CopyTradeAudit — Design (v1.0)
 
-Живой документ. Фиксирует согласованные решения, архитектуру, стартовые
-параметры и открытые вопросы. Обновляется по мере развития.
+Living document. Records agreed decisions, architecture, starting parameters and
+open questions. Updated as the project develops.
 
-## Гипотеза
+## Hypothesis
 
-Можно ли получать положительный результат, наблюдая за публичными решениями
-исторически успешных трейдеров Polymarket, если честно учитывать цену входа,
-задержку обнаружения, ликвидность, комиссии, проскальзывание и изменение
-позиции? Основной допустимый ответ системы — **NO TRADE**.
+Can you make money by following the public decisions of historically successful
+Polymarket traders, once you honestly account for entry price, detection
+latency, liquidity, fees, slippage and position changes? The system's primary
+allowed answer is **NO TRADE**.
 
-## Согласованные решения (интервью grill-me)
+## Agreed decisions
 
-| Область | Решение |
+| Area | Decision |
 |---|---|
-| Юрисдикция | США (+VPN). Paper — ок. Live-через-VPN **не** проектируем (рег. риск) |
-| Категории | Политика + Спорт (архитектура category-agnostic; ingest начинаем с политики) |
-| Режим v1 | Только paper + пустые интерфейсы-заглушки под live за выключенным flag |
-| Виртуальный баланс | $1 000 |
-| Глубина истории | 180 дней |
-| Частота опроса | polling ~90 сек = реальная «задержка обнаружения» |
-| Мин. выборка трейдера | ≥30 разрешённых независимых рынков в категории |
-| Отбор рынков | бинарные YES/NO + фильтр мин. ликвидности |
-| Точка win/loss | net-экспозиция на разрешении; early-exit — отдельная метрика |
-| Порог решения | оба: мин. $ **и** доля от типичного размера трейдера |
-| Переворот | отдельное новое решение (старое закрывается как REVERSED) |
-| Maker/taker | классифицируем; maker/unknown по умолчанию **не** сигналит |
-| Размер ставки | фикс. доля баланса (3%, cap 5% на позицию) |
-| Лимиты | на позицию + на коррелированную группу (10% на событие) |
-| Выход | по правилам; hold-to-resolution всегда логируется как контроль |
-| Гейт входа | положительный edge после издержек + мин. consensus score, иначе NO TRADE |
-| Пул трейдеров | leaderboard ∪ holders подходящих рынков, затем фильтр по выборке |
-| Интерфейс | локальный web-дашборд (FastAPI), только localhost |
-| Подтверждения | paper — авто + полный audit; ручное зарезервировано под live |
-| Стек | Python (uv, src/, pytest) на базе шаблона AIProject |
-| Среда | файлы в WSL, работаем с Windows-стороны (голосовой ввод цел) |
+| Jurisdiction | US — **paper trading only**. Live trading via VPN is explicitly out of scope: Polymarket's international venue has been geoblocked for US IPs since the 2022 CFTC settlement, and circumventing that is a regulatory risk we do not take. See `docs/research/RESEARCH_NOTES.md`. |
+| Categories | Politics + Sports (category-agnostic architecture; ingest starts with politics) |
+| v1 mode | Paper only + empty stub interfaces for live behind a disabled flag |
+| Virtual balance | $1,000 |
+| History depth | 180 days |
+| Poll frequency | ~90 s polling = realistic detection latency |
+| Min trader sample | ≥30 resolved independent markets per category |
+| Market selection | Binary YES/NO + minimum liquidity filter |
+| Win/loss point | Net exposure at resolution; early exit tracked as a separate metric |
+| Decision threshold | Both: minimum $ **and** a fraction of the trader's typical size |
+| Reversal | A separate new decision (the old one closes as REVERSED) |
+| Maker/taker | Classified; maker/unknown does **not** signal by default |
+| Bet size | Fixed fraction of balance (3%, capped at 5% per position) |
+| Limits | Per position + per correlated group (10% per event) |
+| Exit | Rule-based; hold-to-resolution always logged as a control |
+| Entry gate | Positive edge after costs + minimum consensus score, otherwise NO TRADE |
+| Trader pool | Leaderboard ∪ holders of eligible markets, then filtered by sample size |
+| Interface | Local web dashboard (FastAPI), localhost only |
+| Confirmations | Paper — automatic + full audit trail; manual confirmation reserved for live |
+| Stack | Python (uv, src/, pytest) |
 
-## Определение «одного независимого решения»
+## Defining "one independent decision"
 
-- Единица = `кошелёк + рынок`. Направление = знак **чистой экспозиции**
-  (YES-эквивалент), а не отдельные сделки.
-- Всё нормализуется в YES-эквивалент: покупка NO = продажа YES, NO@p = YES@(1−p).
-- Докупки в ту же сторону → тот же прогноз (растут conviction/размер, не счётчик).
-- Переворот знака net → закрытие старого решения (REVERSED) + новое решение.
-- Уменьшение без смены знака → решение остаётся OPEN (не прогноз против).
-- Возврат net к ~0 → CLOSED (ранний выход, вне held-to-resolution win rate).
-- Dust ниже обоих порогов решением не становится.
+- Unit = `wallet + market`. Direction = the sign of **net exposure**
+  (YES-equivalent), not individual trades.
+- Everything normalises to YES-equivalent: buying NO = selling YES,
+  NO@p = YES@(1−p).
+- Adding to the same side → same forecast (raises conviction/size, not the count).
+- Net sign flip → the old decision closes (REVERSED) + a new decision opens.
+- Reduction without a sign change → the decision stays OPEN (not a forecast against).
+- Net returning to ~0 → CLOSED (early exit, excluded from held-to-resolution win rate).
+- Dust below both thresholds never becomes a decision.
 
-Реализация: `src/normalize/decisions.py` (`build_decisions`, `decision_correct`).
+Implementation: `src/normalize/decisions.py` (`build_decisions`, `decision_correct`).
 
-## Скоринг
+## Scoring
 
-- Показываем сырой win rate, **ранжируем** по нижней границе интервала Уилсона.
-- Учитываются только решения, дожившие до разрешения (held-to-resolution).
-- Проверено тестом: 9/10 не ранжируется выше 160/200.
+- Raw win rate is displayed, but **ranking** uses the lower bound of the Wilson
+  interval.
+- Only decisions that survived to resolution (held-to-resolution) are counted.
+- Verified by test: 9/10 does not rank above 160/200.
 
-Реализация: `src/scoring/winrate.py`.
+Implementation: `src/scoring/winrate.py`.
 
-## Симуляция исполнения
+## Execution simulation
 
-- Проход по реальной глубине стакана от лучшей цены наружу.
-- Никогда не по midpoint / одной «красивой» цене.
-- Частичное исполнение при недостатке глубины; комиссия на traded notional
-  (тянется из CLOB per-market, **не хардкодится**); проскальзывание = avg − ref.
+- Walks real order-book depth outward from the best price.
+- Never a midpoint or a single convenient price.
+- Partial fills when depth is insufficient; fees on traded notional (pulled
+  per-market from CLOB, **not hardcoded**); slippage = avg − ref.
 
-Реализация: `src/paper/execution.py` (`simulate_buy`, `simulate_sell`).
+Implementation: `src/paper/execution.py` (`simulate_buy`, `simulate_sell`).
 
-## Архитектура (целевая)
+## Architecture
 
 ```
 src/
-  ingest/     # Gamma / Data / CLOB клиенты + polling — ЕДИНСТВЕННОЕ место сети
-  store/      # SQLite: raw_* (сырьё до нормализации) + нормализованное
-  normalize/  # [готово] сделки -> net -> решения
-  scoring/    # [готово] Wilson / win rate, walk-forward (без будущих данных)
+  ingest/     # Gamma / Data / CLOB clients + polling — the ONLY place with network access
+  store/      # SQLite: raw_* (pre-normalisation) + normalised state
+  normalize/  # trades -> net exposure -> decisions
+  scoring/    # Wilson / win rate, walk-forward (no future data)
   signal/     # consensus score, edge-after-costs, NO TRADE gate
-  paper/      # [готово] симуляция исполнения
-  risk/       # лимиты позиции / коррелированной группы, staleness, kill-switch(заглушка)
-  audit/      # журнал решений + версия правил стратегии
-  web/        # FastAPI + лёгкий frontend (5 экранов)
-  live/       # ПУСТЫЕ заглушки, feature-flag OFF. Никакой логики ордеров
+  paper/      # execution simulation
+  risk/       # position / correlated-group limits, staleness, kill switch (stub)
+  audit/      # decision journal + strategy rule version
+  web/        # FastAPI + light frontend (5 screens)
+  live/       # EMPTY stubs, feature flag OFF. No order logic
 ```
 
-Ядро (`normalize/scoring/signal/paper/risk`) — чистые функции, тестируются
-офлайн без сети. Принцип walk-forward: score и пул на момент каждого решения
-считаются только по данным, известным **до** этого момента.
+The core (`normalize/scoring/signal/paper/risk`) is pure functions, tested
+offline with no network. Walk-forward principle: the score and the pool at each
+decision point are computed only from data known **before** that moment.
 
-## Стартовые параметры
+## Starting parameters
 
-См. `src/domain/params.py` (`StrategyParams`). Все значения — стартовые,
-тюнингуются через конфиг:
+See `src/domain/params.py` (`StrategyParams`). All values are starting points,
+tunable via config:
 
 - min_notional_usd=$100, min_fraction_of_typical=0.25
 - min_resolved_markets=30, history_days=180
@@ -97,30 +98,30 @@ src/
 - starting_balance_usd=$1000, bet_fraction=3%, max_position=5%, max_group=10%
 - consensus_threshold=0.60, min_edge_after_costs=0.02, wilson_z=1.96
 
-## План по фазам
+## Phases
 
-- **A (готово):** детерминированное ядро + тесты — decisions, scoring, execution.
-- **B (готово):** ingest-клиенты (Gamma/Data/CLOB, сеть инъектируется, API 2026/CLOB V2),
-  parsers (raw→domain), store (SQLite: сырьё до нормализации + app_state, переживает
-  перезапуск), детерминированный replay фикстуры. 44 теста зелёные.
-- **C (готово):** signal (consensus + residual edge-after-costs + NO TRADE) + risk
-  (лимиты/staleness). Реализованы 3 фикса: price-aware отбор (skill.py, ROI-пол),
-  остаточный edge против нашей цены, out-of-sample валидация (validation.py).
-- **D (готово):** paper-портфель (sizing, выход по правилам + контрольная ветка
-  hold-to-resolution, полный аудит-рекорд), audit log + таблица audit_events,
-  персистентность состояния между перезапусками. 80 тестов зелёные.
-- **E:** web-дашборд (Dashboard / Markets / Traders / Paper portfolio / Audit).
+- **A (done):** deterministic core + tests — decisions, scoring, execution.
+- **B (done):** ingest clients (Gamma/Data/CLOB, injectable network, 2026 API /
+  CLOB V2), parsers (raw→domain), store (SQLite: raw before normalisation +
+  app_state, survives restart), deterministic fixture replay.
+- **C (done):** signal (consensus + residual edge-after-costs + NO TRADE) + risk
+  (limits/staleness). Three fixes shipped: price-aware selection (`skill.py`,
+  ROI floor), residual edge against our own price, out-of-sample validation
+  (`validation.py`).
+- **D (done):** paper portfolio (sizing, rule-based exits + hold-to-resolution
+  control branch, full audit record), audit log + `audit_events` table, state
+  persistence across restarts.
+- **E (done):** web dashboard (Dashboard / Markets / Traders / Paper portfolio /
+  Audit).
 
-Граф проекта: `graphify-out/` (graph.html / GRAPH_REPORT.md). Запрос:
-`graphify query "<вопрос>"`, обновление `graphify <path> --update`.
+103 tests, all green.
 
-## Открытые вопросы
+## Open questions
 
-- Независимость кошельков: в v1 — лёгкая эвристика co-trading + флаг; полное
-  решение (кластеризация связанных адресов) отложено.
-- Калибровка consensus score → вероятность: только после накопления истории.
-- Точный источник комиссий и параметров стакана — уточнить по актуальной
-  документации CLOB перед фазой B.
-- Классификация категории рынка (Gamma tags) — сопоставление подтвердить на
-  реальных данных при первом ingest.
-```
+- Wallet independence: v1 uses a light co-trading heuristic + a flag; full
+  clustering of related addresses is deferred.
+- Calibrating consensus score → probability: only after enough history accrues.
+- Exact fee source and order-book parameters — to be confirmed against current
+  CLOB documentation.
+- Market category classification (Gamma tags) — mapping to be confirmed against
+  real data.
