@@ -1,4 +1,4 @@
-# AUDIT_REPORT — CopyTrader pre-live audit
+# AUDIT_REPORT — CopyTradeAudit pre-live audit
 
 _Independent pre-live audit. Goal: try to DISPROVE profitability, not confirm it.
 Real-money trading, private keys, and order placement are out of scope by mandate._

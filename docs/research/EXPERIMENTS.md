@@ -87,7 +87,7 @@ favourite 85% of the time, buy near-fair), noise (random), favourite-buyers
 ## 6. Reproduce
 
 ```bash
-cd "CopyTrader - v0.0"
+cd "CopyTradeAudit - v1.0"
 uv sync
 uv run pytest -q                         # full suite (98 tests)
 uv run python -m src.backtest.experiments  # the tables above (seed-fixed)

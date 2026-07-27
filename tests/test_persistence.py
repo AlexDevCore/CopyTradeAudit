@@ -16,7 +16,7 @@ FEE = Decimal("0.01")
 
 
 def _portfolio_with_activity():
-    p = PaperPortfolio(Decimal(1000), strategy_version="v0.0")
+    p = PaperPortfolio(Decimal(1000), strategy_version="v1.0")
     fill = simulate_buy(
         [Level(Decimal("0.50"), Decimal(1000))], Decimal(100), fee_rate=FEE
     )

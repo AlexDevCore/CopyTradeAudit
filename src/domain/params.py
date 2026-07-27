@@ -51,7 +51,7 @@ class StrategyParams:
     wilson_z: float = 1.96
 
     # --- provenance ---
-    strategy_version: str = "v0.0"  # stamped on every audited paper trade
+    strategy_version: str = "v1.0"  # stamped on every audited paper trade
 
 
 DEFAULTS = StrategyParams()

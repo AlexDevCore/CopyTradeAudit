@@ -68,8 +68,8 @@ def layout(title: str, active_path: str, body: str, *, mode: str = "PAPER") -> s
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        f"<title>CopyTrader · {escape(title)}</title><style>{_CSS}</style></head><body>"
-        f"<header><strong>CopyTrader</strong><nav>{nav}</nav>"
+        f"<title>CopyTradeAudit · {escape(title)}</title><style>{_CSS}</style></head><body>"
+        f"<header><strong>CopyTradeAudit</strong><nav>{nav}</nav>"
         f"<span class='badge {escape(mode)}'>{escape(mode)}</span></header>"
         f"<main><h1>{escape(title)}</h1>{body}</main></body></html>"
     )

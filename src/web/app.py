@@ -14,7 +14,7 @@ from src.web.service import DashboardService
 
 
 def create_app(service: DashboardService) -> FastAPI:
-    app = FastAPI(title="CopyTrader", docs_url=None, redoc_url=None)
+    app = FastAPI(title="CopyTradeAudit", docs_url=None, redoc_url=None)
     mode = service.mode
 
     @app.get("/", response_class=HTMLResponse)

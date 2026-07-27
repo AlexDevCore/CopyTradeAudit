@@ -1,4 +1,4 @@
-"""Core value objects for CopyTrader.
+"""Core value objects for CopyTradeAudit.
 
 Everything a trader does is normalised to a *YES-equivalent* signed quantity so
 that a position in one market collapses to a single scalar: net YES-equivalent

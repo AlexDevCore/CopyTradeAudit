@@ -121,7 +121,7 @@ class PaperPortfolio:
     """One position per market (MVP). Deterministic, no I/O."""
 
     def __init__(
-        self, starting_balance: Decimal, strategy_version: str = "v0.0"
+        self, starting_balance: Decimal, strategy_version: str = "v1.0"
     ) -> None:
         self.starting_balance = starting_balance
         self.free_balance = starting_balance

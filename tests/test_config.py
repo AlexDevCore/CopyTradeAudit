@@ -2,7 +2,7 @@ from src import config
 
 
 def test_project_name():
-    assert config.PROJECT_NAME == "copytrader"
+    assert config.PROJECT_NAME == "copytradeaudit"
 
 
 def test_env_file_exists_false_when_missing(tmp_path, monkeypatch):
