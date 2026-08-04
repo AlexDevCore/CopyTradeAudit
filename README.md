@@ -1,4 +1,8 @@
-# CopyTradeAudit — v1.0
+# CopyTradeAudit
+
+[![tests](https://github.com/AlexDevCore/CopyTradeAudit/actions/workflows/tests.yml/badge.svg)](https://github.com/AlexDevCore/CopyTradeAudit/actions/workflows/tests.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 
 A research engine built to test one honest hypothesis:
 
