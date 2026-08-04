@@ -25,3 +25,6 @@ graphify-out/
 # events can be replayed without re-hitting the API; raw uncompressed dumps are not.
 data/*.json
 !data/*.json.gz
+
+# local editor/agent settings
+.claude/
